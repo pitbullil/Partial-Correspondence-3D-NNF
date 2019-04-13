@@ -1,5 +1,6 @@
 featurecodepath =  fullfile(pwd);%set to the repository root dir
-assert(exist(fullfile(featurecodepath,'build','Release','3DDIS_OMP.exe'), 'file') == 2,'not in code root folder')
+ddis_params.code_path = fullfile(featurecodepath,'nnf_sparse_code','build','Release','3DDIS_OMP.exe');
+assert(exist(ddis_params.code_path, 'file') == 2,'not in code root folder')
 addpath(genpath(featurecodepath))
 close all
 clear all
