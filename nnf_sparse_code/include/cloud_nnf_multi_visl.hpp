@@ -1,0 +1,1100 @@
+#ifndef CLOUD_NNF_MULTI_H
+#define CLOUD_NNF_MULTI_H
+
+#include <proj_namespaces.hpp>
+#include <math.h>
+#include <pcl/common/io.h>
+#include <cloud_surface_visl.hpp>
+#include <cloud_features_visl.hpp>
+#include <cloud_registration_visl.hpp>
+#include <cloud_key_points_visl.hpp>
+#include <cloud_visualization_visl.hpp>
+#include <cloud_io_visl.hpp>
+#include <pcl/search/kdtree.h>
+#include <pcl/features/from_meshes.h>
+#include <meshgraph.h>
+#include <string.h>
+#include <tuple>
+#include <misc_utils.hpp>
+#include <pcl/registration/correspondence_estimation.h>
+#include <pcl/registration/correspondence_rejection_sample_consensus.h>
+#include <pcl/registration/correspondence_rejection_distance.h>
+#include <pcl/registration/transformation_estimation_svd.h>
+#include <pcl/common/pca.h>
+#include <QuickSort.hpp>
+
+using namespace dis3;
+
+class FeatureCloud {
+public:
+	std::string name;
+	vector<uint32_t> DIS_v;
+	std::string ReturnType() {
+		return name;
+	};
+	Eigen::MatrixXf DT, DQ;
+	std::vector<uint32_t> feature_point_inds,feature_point_map;
+	vector<vector<float>> TDistances;
+	vector<float> Gmax, Mmax, Lmax;//maximal similarity score for normalization and aid in visualization
+	//point clouds
+	XYZCloud::Ptr Qc, Qkeypoints, Tc, Tkeypoints, QGridCloud, TGridCloud,result, resultkeypoints,Rboundary,TBoundary;
+	//Normals
+	NormalCloud::Ptr QN, TN;
+	int candidates = 5;
+	int num_samples,model_vertices,part_vertices;
+	float R_thresh, R_thresh_ms, R_thresh_ls;
+	vector<MINQ<ind_dis_s>> Feature_Scores_Q;
+	std::vector<float> r_j;
+	std::vector<uint32_t> Kappa;
+	std::vector<uint32_t> Kappa_j;
+	std::vector<uint32_t> Patch_Buddies;
+	vector<float> mindistances;//distance difference of the minimal corresponding point
+
+	vector<vector<ind_dis_s>> Result;
+	//holders for the polygons
+	vector<pcl::Vertices> Qpolygons;
+	vector<pcl::Vertices> Tpolygons;
+	vector<uint32_t> closest_temp;
+	MAXQ<ind_r_s> TRadiuses;//max heap used to sort the feature point maximal radiuses for optimization purposes
+	
+	vector<ind_r_s> F_R;//sorted by radiuses, ind here is the index in the feature point vector feature_point_inds - not in the cloud
+	//distance from centers arrays
+	vector<float> TQuasiGeoDistances;
+	vector<float> SQuasiGeoDistances;
+	vector<float> TRVec;
+	//meshes
+	pcl::PolygonMeshPtr Tmesh, Qmesh,Rmesh;
+
+	//meshes in graph format
+	graphMesh T_G, Q_G,R_G;
+
+	//information about the Template center
+	focal_s T_f,R_f;
+	vector<vector<float>> T_distances;
+	vector<vector<float>> R_distances;
+	vector<vector<vert_dis_s>> R_boundary_candidates;
+	//vector<ind_dis_s> sim_result;
+	vector<ind_r_s> scene_P_D; vector<ind_r_s> last_scene_P_D;
+
+	vector<int> T_BoundaryInds;
+	vector<bool> T_Boundary;
+	vector<int> R_BoundaryInds;
+
+	pcl::PointCloud<HistogramInt<5>>::Ptr DIS_cummulative,Kappacum;
+	//Nearest Neighbor field holders
+	pcl::PointCloud<NNFX<5>>::Ptr nnf5, resultnnf5;
+	pcl::PointCloud<NNFX<1>>::Ptr nnf1, resultnnf1;
+	vector<pcl::PointCloud<NNFX<1>>::Ptr> nnf_f;
+	NNFX<5> resultinds;
+	//correspondences for registration/visualization
+	pcl::CorrespondencesPtr Corrs,filtered_closest;
+
+	//kdtrees for eucludean distances
+	pcl::KdTreeFLANN<XYZ> kdtree,QGkdtree,TGkdtree;
+
+	//Nearest neighbor fields
+	XYZLCloud::Ptr nnf, resultnnf,DDIS_refined_NNF, Reg_points;
+
+	//statistics clouds
+	XYZICloud::Ptr similarityCloud, resultlabel,kappac,distc, distcfull;
+	vector<XYZICloud::Ptr> FsimilarityCloud;
+	vector<XYZICloud::Ptr> MSFsimilarityCloud;
+	vector<XYZICloud::Ptr> LSFsimilarityCloud;
+
+	vector<vector<float>> Fsimilarity;
+	vector<vector<float>> MSFsimilarity;
+	vector<vector<float>> LSFsimilarity;
+
+	vector<XYZRGBCloud::Ptr> FsimilarityCloudColor;
+
+	vector<PolygonMeshPtr> Feature_Patches;
+	//all the matching parameters are stored here
+	template_match_parms_s P;
+	float grid_max_resolution;
+	uint32_t res_int;
+	pcl::PointIndices::Ptr result_indices;
+	pcl::ExtractIndices<pcl::PointXYZ>::Ptr extract;
+	//default constructor
+	FeatureCloud() {
+		Qc = XYZCloud::Ptr(new XYZCloud);
+		XYZCloud::Ptr Tcloud(new XYZCloud); Tc = Tcloud;
+		XYZCloud::Ptr QKcloud(new XYZCloud); Qkeypoints = QKcloud;
+		XYZCloud::Ptr TKcloud(new XYZCloud); Tkeypoints = TKcloud;
+		XYZCloud::Ptr resultt(new XYZCloud); result = resultt;
+		XYZCloud::Ptr resultk(new XYZCloud); resultkeypoints = resultk;
+		NormalCloud::Ptr Qnormal(new NormalCloud); QN = Qnormal;
+		NormalCloud::Ptr Tnormal(new NormalCloud); TN = Tnormal;
+		XYZLCloud::Ptr temp(new XYZLCloud); nnf = temp;
+		XYZLCloud::Ptr tempn(new XYZLCloud); resultnnf = tempn;
+		XYZCloud::Ptr Qgcloud(new XYZCloud); QGridCloud = Qgcloud;
+		XYZCloud::Ptr Tgcloud(new XYZCloud); TGridCloud = Tgcloud;
+		XYZICloud::Ptr temp2(new XYZICloud); similarityCloud = temp2;
+		resultlabel = XYZICloud::Ptr(new XYZICloud);
+		distc = XYZICloud::Ptr(new XYZICloud);
+		kappac = XYZICloud::Ptr(new XYZICloud);;
+		DDIS_refined_NNF = XYZLCloud::Ptr(new XYZLCloud);
+		Qmesh = pcl::PolygonMeshPtr(new pcl::PolygonMesh());
+		Tmesh = pcl::PolygonMeshPtr(new pcl::PolygonMesh());
+		Rmesh = pcl::PolygonMeshPtr(new pcl::PolygonMesh());
+		distcfull = XYZICloud::Ptr(new XYZICloud);
+		nnf1 = pcl::PointCloud<NNFX<1>>::Ptr(new pcl::PointCloud<NNFX<1>>());
+		nnf5 = pcl::PointCloud<NNFX<5>>::Ptr(new pcl::PointCloud<NNFX<5>>());
+		resultnnf1 = pcl::PointCloud<NNFX<1>>::Ptr(new pcl::PointCloud<NNFX<1>>());
+		resultnnf5 = pcl::PointCloud<NNFX<5>>::Ptr(new pcl::PointCloud<NNFX<5>>());
+		DIS_cummulative = pcl::PointCloud<HistogramInt<5>>::Ptr(new pcl::PointCloud<HistogramInt<5>>());
+		Kappacum = pcl::PointCloud<HistogramInt<5>>::Ptr(new pcl::PointCloud<HistogramInt<5>>());
+		Reg_points = XYZLCloud::Ptr(new XYZLCloud);
+		Rboundary = XYZCloud::Ptr(new XYZCloud);
+		TBoundary = XYZCloud::Ptr(new XYZCloud);
+
+	}
+
+	//Kappa holds how many points in Q match the same point in T
+	vector<uint32_t> Kappa_res;
+	vector<uint32_t> closest_matches;
+	vector<float> min_distances_res;
+
+	//General Keypoint calculation method
+	void ComputeKeyPoints(nnfDest d);
+	void meshstats(nnfDest d);
+	//Load a grid mesh from the file in path 
+	void LoadGridMesh(string path, nnfDest d);
+
+	void LoadSurface(string path, nnfDest d);
+
+	//Surface reconstruction method 
+	void Reconstruct_Surface(nnfDest d);
+	void Template_refinement();
+	//sets the matching parameters
+	void setparams(template_match_parms_s p) { P = p; }
+
+	//returns the matching parameters
+	template_match_parms_s gettparams() { return P; };
+
+	//reads a cloud from path according to dest
+	bool readCloud(string path, nnfDest d);
+
+	//normal computation - force indicates if we run over loaded data
+	void computeNormal(nnfDest d,bool force);
+
+	//Computes the nearest neighbor fields
+	virtual void computeNNF() {};
+
+	//Computes the features
+	virtual void computeF(nnfDest d) {};
+	virtual void loadF(nnfDest d,string path) {};
+
+	void save_distance_matrix(string path, nnfDest d);
+	//Loads template center from file
+	void LoadTFocal(string path);
+	void LoadFeatureInds(string path);
+
+	//Saves template center to file
+	void saveTFocal(string path);
+
+	//Finds the focal- minimizer of the maximal distance on it's distance tree
+	void calcTFocal();
+
+	//Loads nearest neighbor fields from set file
+	void loadNNFField();
+
+	//Loads center from file
+	void LoadFocal(string file);
+	
+	vector<int> extract_band_indices(float distance,float Ewidth);
+	//calculates feature stats
+	virtual void feature_moments() = 0;
+
+	//demean feature stats
+	virtual void demean_features(nnfDest d) = 0;
+
+	//extract result statistics anf clouds - NNF of result, colors scene 
+	virtual void extractResult(bool res = true)=0;
+
+	//Main template matching function - calculates similarity score for the whole scene
+	virtual vector<vector<ind_dis_s>> calculateSimilarity()=0;
+	//virtual vector<ind_dis_s> calculateSimilarityband(vector<int> candidates, int origin)=0;
+	//Calculate similarity score for a single search window centered around point i in the scene
+	vector<ind_r_s> extract_patch_match(uint32_t t_i, uint32_t q_i);
+	virtual void pointSimilarity(uint32_t i, vector<vector<float>>& TDistances,vector<ind_r_s>& F_R) = 0;
+	ind_dis_s lower_scale_sim_max(uint32_t src, uint32_t result,int i, SimilarityMeasure sim);
+	//A method to show Nearest neighbor matches and distance heat map of the matches between last extracted result and template
+	void showNNF(uint32_t ID);
+
+	void visualizeDDIS(uint32_t src, uint32_t target);
+	/**\brief extracts a template candidate centered around keypoint i and extracts similarity input informaiton
+	   \param i center point index
+	   \param scene_indices a container which will be filled with the candidate indices
+	   \param sceneDistances a container which will be filled with the candidate points' distance from the focal
+	   \param extract a filter used to extract indices into a seperate cloud for load handling
+	   \param full tells if to take only keypoints or full cloud points
+	   */
+	void extract_all_feature_patches(string path);
+	pcl::PolygonMesh::Ptr extract_feature_patch(int i, vector<ind_r_s>& scene_P_D, nnfDest Dest);
+	void load_correspondences(string path,bool throw_header=false);
+	void load_result(string path);
+
+	void show_correspondences_side(int num);
+	void extractTemplateCandidate(int i, vector<ind_r_s>& scene_P_D,
+		                          pcl::ExtractIndices<pcl::PointXYZ>::Ptr extract, float R, uint32_t &M, bool full = false);
+	//Extract window using the euclidean regime
+	void extractTemplateCandidateEuc(int i, vector<ind_r_s>& scene_P_D,
+		pcl::ExtractIndices<pcl::PointXYZ>::Ptr extract, float R, bool full);
+	//Extract window using point lying near a surface - used in case we sampled the surface for grid but want 
+	//the entire set of points for similarity purposes
+	void extractTemplateCandidateGeoNN(int i, vector<ind_r_s>& scene_P_D,
+		ExtractIndices<PointXYZ>::Ptr extract, float R, bool full);
+	//Extract the window using a surface mesh
+	void extractTemplateCandidateGeo(int i, vector<ind_r_s>& scene_P_D, float R, uint32_t &M, bool full);
+	void show_correspondences(int num);
+	void show_similarity_side(int num);
+	void load_feature_similarity(int num);
+	void load_feature_patch(int num);
+
+	void findResultBoundary();
+	/**\brief calculates stats for the purpose of similarity calculation
+	   \param scene_indices contains the candidate points indices
+	   \param M the number of points in the candidate
+	   \param sDistances the distance of each point from the candidate focal
+	   \param tDistances the distances of each point on the template from it's focal
+	   \param mindistances the minimal distance of each point in the template to one of the scene points matching it
+	   \param Kappa measures how many point point to a certain template point
+	   \param Kappa_j saves for each point in the window how many points point to the same template point
+	   \param Patch_Buddies saves nearest neighbor for a given scene point in the subarray
+	   \param r_j saves the difference between distance of point in the scene from the center and distance of it's matching template point from the template focal
+	   \param DISs the DIS score
+	   \param closest - saves the point in the scene with minimum r_j to the template point
+	*/
+
+	void extractCandidatestats(vector<ind_r_s>& scene_P_D, uint32_t M, vector<float>& tDistances, vector<float>& mindistances, vector<uint32_t>& Kappa, vector<uint32_t>& Kappa_j, vector<uint32_t>& Patch_Buddies, vector<float>& r_j, vector<uint32_t>& closest, HistogramInt<5>& DIS,int feature);
+	
+	//returns the distance of every point on the template
+	vector<float> getTemplateDistances(patchMode Mode,int i, float& R);
+	//Uses euclidean regime
+	vector<float> Template_Euclid_Distance(int i, float& R);
+	//Uses surface for distances
+	vector<float> Template_Geo_Distance(int i, float& R);
+	//Projects points to their closest point on the surface
+	vector<float> Template_Geo_NNDistance(int i, float& R);
+	//calculates a geodesic distance matrix between the mesh vertices
+	void createresultDmatrix();
+	//calculates a patch similarity score to the template
+	virtual float Similarity(int M, vector<uint32_t>& Kappa, std::vector<uint32_t>& Kappa_j, vector<float>& mindistances,
+		std::vector<uint32_t>& Patch_Buddies, std::vector<float>& r_j, int& DISs, std::vector<float>& Distances) {
+		return 0;
+	};
+	virtual ms_dis_s MSSimilarity(int M, vector<ind_r_s>& scene_P_D, vector<uint32_t>& Kappa, std::vector<uint32_t>& Kappa_j, vector<float>& mindistances,
+		std::vector<uint32_t>& Patch_Buddies, std::vector<float>& r_j, int& DISs, std::vector<float>& Distances) {
+		return ms_dis_s(0, 0);
+	};
+	//creates a list of the indexes of the boundaries on the mesh
+	void extractTemplateBoundaryInds();
+	void createRDistanceTree();
+	void LoadMesh(nnfDest d) {
+		switch (d) {
+		case T: pcl::io::loadPLYFile(P.T.in, *Tmesh); break;
+		case Q: pcl::io::loadPLYFile(P.S.in, *Qmesh); break;
+		}
+	};
+
+	float DDISfunc(int M, std::vector<uint32_t>& Kappa_j, std::vector<float>& r_j);
+	float WDISfunc(int M, vector<uint32_t>& Kappa, std::vector<float>& mindistances);
+	tris_dis_s MSWDISfunc(int M, vector<uint32_t>& Kappa, std::vector<float>& mindistances, vector<float>& Distances);
+	tris_dis_s TRISDISfunc(int M, vector<uint32_t>& Kappa, std::vector<float>& mindistances, vector<float>& Distances);
+	tris_dis_s TRIDISPfunc(int M, vector<uint32_t>& Kappa, std::vector<float>& mindistances, vector<float>& Distances);
+
+	float WDISPfunc(int M, vector<uint32_t>& Kappa, std::vector<float>& mindistances, std::vector<float>& Distances);
+
+	float HDISfunc(int M, vector<uint32_t>& Kappa, vector<float>& mindistances);
+	float HDISPfunc(int M, vector<uint32_t>& Kappa, vector<float>& r_j);
+
+	virtual void registrationmds() = 0;;
+	void icp_mds();
+
+	void save_similarity(string path) {
+		std::fstream hsim_out(path+"_h_sim.csv", std::fstream::out);
+		std::fstream msim_out(path + "_m_sim.csv", std::fstream::out);
+		std::fstream lsim_out(path + "_l_sim.csv", std::fstream::out);
+
+		for (int i = 0; i<num_samples; i++) {
+			vector<float> HS =Fsimilarity.at(i);
+			vector<float> MS=MSFsimilarity.at(i);
+			vector<float> LS = LSFsimilarity.at(i);
+			hsim_out << HS.at(0);
+			msim_out << MS.at(0);
+			lsim_out << LS.at(0);
+
+			for (int j = 1; j < model_vertices; j++) {
+				hsim_out << "," << HS.at(j);
+				msim_out << "," << MS.at(j);
+				lsim_out << "," << LS.at(j);
+			}
+			hsim_out << "\n";
+			msim_out << "\n";
+			lsim_out << "\n";
+		}
+	};
+
+	virtual void saveCloud(string path, nnfDest d) {
+		switch (d) {
+		case T:savePointCloudToFile(Tc, path); break;
+		case Q:savePointCloudToFile(Qc, path); break;
+		case TKEY:savePointCloudToFile(Tkeypoints, path); break;
+		case QKEY:savePointCloudToFile(Qkeypoints, path); break;
+		case NNF: {
+			switch (P.nnfType) {
+			case NNF: pcl::io::savePCDFile(path, *nnf);  break;
+			case NNF1:pcl::io::savePCDFile(path, *nnf1); break;
+			case NNF5:pcl::io::savePCDFile(path, *nnf5); break;
+			}
+			break;
+		}
+		case RBOUNDARY:savePointCloudToFile(Rboundary, path); break;
+		case NNFCOLOR: {
+			XYZRGBCloud::Ptr nnf_color;
+			switch (P.nnfType) {
+			case NNF: nnf_color = visualizeCloud<XYZL>(nnf);  break;
+			case NNF1:nnf_color = visualizeNNF<NNFX<1>>(*nnf1, Qkeypoints); break;
+			case NNF5:nnf_color = visualizeNNF<NNFX<5>>(*nnf5, Qkeypoints); break;
+			}
+			savePointCloudToFile(nnf_color, path); break; }
+		case SIMILARITY:pcl::io::savePCDFile(path, *similarityCloud); break;
+		case SIMILARITYCOLOR:
+			for (int i=0;i<num_samples;i++){
+				XYZICloud::Ptr nsimilarity(FsimilarityCloud.at(i));
+				for (int j = 0; j < nsimilarity->size(); j++) {
+					nsimilarity->at(j).intensity = nsimilarity->at(j).intensity / Gmax.at(feature_point_inds.at(i)) * 255;
+				}
+				XYZRGBCloud::Ptr sim_color = visualizeCloud<XYZI>(nsimilarity);
+				io::savePCDFile(path + "\\F_" + to_string(i) + "_similarity.pcd", *FsimilarityCloud.at(i));
+				toPCLPointCloud2(*sim_color, Qmesh->cloud);
+				io::savePLYFile(path + "\\F_" + to_string(i) + "_similarity.ply", *Qmesh);
+
+				if (P.similarity == TRIDIS) {
+					XYZICloud::Ptr Msimilarity(MSFsimilarityCloud.at(i));
+					XYZICloud::Ptr Ssimilarity(LSFsimilarityCloud.at(i));
+					for (int j = 0; j < Msimilarity->size(); j++) {
+						Msimilarity->at(j).intensity = Msimilarity->at(j).intensity / Mmax.at(feature_point_inds.at(i)) * 255;
+						Ssimilarity->at(j).intensity = Ssimilarity->at(j).intensity / Lmax.at(feature_point_inds.at(i)) * 255;
+					}
+					XYZRGBCloud::Ptr Msim_color = visualizeCloud<XYZI>(Msimilarity);
+					toPCLPointCloud2(*Msim_color, Qmesh->cloud);
+					io::savePLYFile(path + "\\MF_" + to_string(i) + "_similarity.ply", *Qmesh);
+
+					io::savePCDFile(path + "\\MF_" + to_string(i) + "_similarity.pcd", *MSFsimilarityCloud.at(i));
+					XYZRGBCloud::Ptr Ssim_color = visualizeCloud<XYZI>(Ssimilarity);
+					io::savePCDFile(path + "\\SF_" + to_string(i) + "_similarity.pcd", *LSFsimilarityCloud.at(i));
+					toPCLPointCloud2(*Ssim_color, Qmesh->cloud);
+					io::savePLYFile(path + "\\SF_" + to_string(i) + "_similarity.ply", *Qmesh);
+				}
+			}
+			break;
+		case R: {
+			XYZRGBCloud::Ptr r_color = visualizeCloud<XYZI>(resultlabel, 1);
+			savePointCloudToFile(r_color, path); break; }
+		case RESULT:savePointCloudToFile(result, path); break;
+		case RKEY:savePointCloudToFile(resultkeypoints, path); break;
+		case RNNF:	
+			switch (P.nnfType) {
+
+			case NNF: pcl::io::savePCDFile(path, *resultnnf);  break;
+			case NNF1:pcl::io::savePCDFile(path, *resultnnf1); break;
+			case NNF5:pcl::io::savePCDFile(path, *resultnnf5); break;
+			}
+			break;
+		case KAPPA: {
+			savePointCloudToFile(kappac, path);
+			XYZRGBCloud::Ptr k_color = visualizeCloud<XYZI>(kappac, 1);
+			savePointCloudToFile(k_color, path+"color");
+			break; }
+		case DIST: {
+			{
+				savePointCloudToFile(distcfull, path);
+				XYZRGBCloud::Ptr d_color = visualizeCloud<XYZI>(distc, 1);
+				savePointCloudToFile(d_color, path + "color");
+				break; 
+			}
+		}
+		case CLOSEST: {
+			{
+				savePointCloudToFile(DDIS_refined_NNF, path);
+				XYZRGBCloud::Ptr c_color = visualizeCloud<XYZL>(DDIS_refined_NNF);
+				savePointCloudToFile(c_color, path + "color");
+				break;
+			}
+		}
+
+		case RMESH: pcl::io::savePLYFile(path, *Rmesh);
+		case TSURF:break;
+		case QSURF:break;
+		};
+	};
+
+	cloud_statistics_s CalculateStatistics(nnfDest d, string out);
+
+	virtual ~FeatureCloud() = default;
+	virtual pcl::CorrespondencesPtr matchKeyPointsFeaturesmds(float threshold)=0;
+	//preform registration to the result
+	virtual void registration() = 0;
+
+	void icp();
+	virtual void extractTemplate(int ind) =0;
+	void show_registered();
+	//result picture
+	void snapshot();
+	//DEBUG FEATURES/METHODS
+	vector<int> vertGTmap;
+	vector<int> vertGTsymmap;
+	/** \brief This method returns the vertices mapping from a barycentric map(closest vertex)
+	\param gt_map a barycentric coordinate/polygon map
+	\return vertex to vertex map according to maximal barycentric coordinate
+	*/
+	vector<int> Refined_GT_map(vector<barycentric_polygon_s> gt_map);
+
+	vector<vector<ind_dis_s>> Densify_correspondences();
+
+	void Densify_template_match(int src);
+
+	void reject_outliers();
+
+	int Triangulate_match(int src, int detectors);
+
+
+	/** \brief This method returns the distance differences from the centers between 
+	           a template point and it's ground truth mapping
+	\param gt_map a vertex mapping
+	\return mean and var of geodesic distances
+	*/
+	distance_stat Distance_Difference(int center, vector<int> gt_map);
+
+	/*returns a struct containing indices of top 5 matching window centers and their similarity score*/
+	NNFX<5> extract_top();
+
+	/*accumulates the number of exact matches on closest - 5th closest NN*/
+	pcl::PointCloud<pcl::Histogram<5>>::Ptr exact_matches;
+	
+	/** \brief This method returns the distances from the center of other points
+	    \param center the reference point
+	    \param top a struct containing the query points
+							*/
+	vector<float> top_distances(int center, NNFX<5> top, float maxdist = INFINITY);
+	
+	vector<int> GT_indices(vector<barycentric_polygon_s> gt_map);
+	
+	vector<int> patch_indices(int i);
+
+	XYZCloud::Ptr cutgt(vector<int> gt_indices);
+
+	pcl::PointCloud<NNFX<5>>::Ptr cutnnf(vector<int> gt_indices);
+
+	float gt_scene_ratio(vector<int> scene_indices, vector<int> gt_indices);
+	/** \brief counts the number of exact matches in NNF according to the ground truth
+	     a mathc is considered exact if it falls on one of the 3 polygon vertices
+		\param gt_map a vactor containing the ground truth polygons*/
+	vector<matches_stat_s> exact_match_counter(vector<barycentric_polygon_s> gt_map);
+	HistogramInt<5> FeatureCloud::exact_match_counter(vector<int> gt_map);
+	/** \brief logs distances of matches from their ground truth
+	\param gt_map a vector containing the ground truth polygons*/
+	pcl::PointCloud<pcl::Histogram<5>>::Ptr match_distances(vector<int> gt_map, float maxdist = INFINITY);
+
+	/** \brief counts DIS of only ground truth points
+	*/
+	HistogramInt<5> GTDIS(vector<barycentric_polygon_s> gt_bar);
+
+	/** \brief this method returns a statistics of the minimal possible 
+	     distances of the ground truth points from their matches using 1-5 nearest neighbors
+	    \param distogram - a histogram of distances between GT and it's match
+		\param gt_map a map of Template points to Scene points
+	*/
+	vector<distance_stat> distance_stats(pcl::PointCloud<pcl::Histogram<5>>::Ptr distogram, vector<int> gt_map);
+};
+
+template <class CloudT, class D> class Feature1 : public FeatureCloud {
+public:
+	pcl::KdTreeFLANN<CloudT, D> patchFTree;
+	pcl::PointCloud<CloudT> QF,TF,RF;
+	CloudT MeanF;
+	CloudT VarF;
+	void computeF(nnfDest d) {};
+	void computeNNF() {};
+	Feature1() {
+	}
+	void loadF(nnfDest d, string path);
+	void pointSimilarity(uint32_t i, vector<vector<float>>& TDistances, vector<ind_r_s>& F_R);
+	vector<ind_dis_s> calculateSimilarityband(vector<int> candidates,int origin);
+	tris_dis_s Similarity(int M, vector<ind_r_s>& scene_P_D, vector<uint32_t>& Kappa, std::vector<uint32_t>& Kappa_j, vector<float>& mindistances,
+		std::vector<uint32_t>& Patch_Buddies, std::vector<float>& r_j, int& DISs,std::vector<float>& Distances);
+	ms_dis_s MSSimilarity(int M, vector<ind_r_s>& scene_P_D, vector<uint32_t>& Kappa, std::vector<uint32_t>& Kappa_j, vector<float>& mindistances,
+		std::vector<uint32_t>& Patch_Buddies, std::vector<float>& r_j, int& DISs, std::vector<float>& Distances);
+	vector<vector<ind_dis_s>> calculateSimilarity();
+	float BBSfunc(int M, vector<ind_r_s>& scene_P_D, vector<uint32_t>& Kappa, std::vector<uint32_t>& Patch_Buddies);
+	float WBBSfunc(int M, vector<ind_r_s>& scene_P_D, vector<uint32_t>& Kappa, std::vector<uint32_t>& Patch_Buddies, vector<float>& mindistances);
+
+	void saveCloud(string path, nnfDest d);
+	pcl::CorrespondencesPtr matchKeyPointsFeatures(float threshold=1);
+	void extractTemplate(int ind);
+	void extractResult(bool res = true);
+	void registration();
+	void registrationmds();
+	pcl::CorrespondencesPtr matchKeyPointsFeaturesmds(float threshold=1);
+	~Feature1() {};
+};
+
+template <class CloudT> class CHI2Feature : public Feature1<CloudT, flann::ChiSquareDistance<float>> {
+public:
+	void computeNNF();
+	void feature_moments();
+	void demean_features(nnfDest d);
+};
+
+template <class CloudT> class L2Feature : public Feature1<CloudT, flann::L2_Simple<float>> {
+public:
+	void computeNNF();
+	void feature_moments();
+	void demean_features(nnfDest d);
+};
+
+class FPFHFeature : public CHI2Feature<FPFH> {
+public:
+	FPFHFeature() {
+	}
+	void computeF(nnfDest d);
+};
+
+class SFPFHFeature : public CHI2Feature<SFPFH> {
+public:
+	SFPFHFeature() {
+	}
+	void computeF(nnfDest d);
+};
+
+class GFPFHFeature : public CHI2Feature<GFPFH> {
+public:
+	GFPFHFeature() {
+	}
+	void computeF(nnfDest d);
+};
+
+class GPFHFeature : public CHI2Feature<GPFH> {
+public:
+	GPFHFeature() {
+	}
+	void computeF(nnfDest d);
+};
+
+class SHOTFeature : public L2Feature<SHOT> {
+public:
+	SHOTFeature() {
+	}
+	void computeF(nnfDest d);
+};
+
+class ROPSFeature : public L2Feature<ROPS> {
+public:
+	ROPSFeature() {
+	}
+	void computeF(nnfDest d);
+};
+
+class PFHFeature : public CHI2Feature<PFH> {
+public:
+	PFHFeature() {
+	}
+	void computeF(nnfDest d);
+};
+
+class HKSFeature : public L2Feature<HKS> {
+public:
+	HKSFeature() {
+	}
+	void computeF(nnfDest d);
+};
+
+class SIHKSFeature : public L2Feature<SIHKS> {
+public:
+	SIHKSFeature() {
+	}
+	void computeF(nnfDest d);
+};
+
+class SCHKSFeature : public L2Feature<SCHKS> {
+public:
+	SCHKSFeature() {
+	}
+	void computeF(nnfDest d);
+};
+
+class LBEIGSFeature : public L2Feature<LBEIGS> {
+public:
+	LBEIGSFeature() {
+	}
+	void computeF(nnfDest d);
+};
+
+template<class CloudT, class D> vector<vector<ind_dis_s>> Feature1<CloudT,D>::calculateSimilarity() {
+	R_thresh = P.r_thresh * P.S.diam / 100; //threshold for sub piece radius
+	if (P.similarity == MSWDIS) { R_thresh_ms = R_thresh / 2; R_thresh_ls = R_thresh / 2; };//If using 2 scales set lower scales Radius
+	if (P.similarity == TRIDIS) {
+		R_thresh_ms = 2 * R_thresh / 3;
+		R_thresh_ls = R_thresh / 3;
+	}//If using 3 scales set lower scales Radii
+
+	cout << "1";
+	Result.resize(Tc->size());//initializes a match vector for every point on the part
+	DIS_cummulative->resize(model_vertices);
+	Feature_Scores_Q.resize(num_samples);//resizing the Correspondences according to the desired number of feature points
+	//vector<vector<float>> TDistances;//holds the distance of every feature point on the template to any other point on the mesh 
+	float R;
+
+	for (uint32_t j = 0; j < num_samples; j++) {
+		TDistances.at(j) = getTemplateDistances(P.pMode, feature_point_inds.at(j), R);
+		if (P.r_thresh < 100) { R = R_thresh; };
+		TRadiuses.push(ind_r_s(j,R*1.05));
+	}
+	for (uint32_t j = 0; j < num_samples; j++) {//creating a list of feature points sorted by their radius from the farthest point
+		F_R.push_back(TRadiuses.top()); TRadiuses.pop();
+	}
+	QGkdtree.setInputCloud(QGridCloud);//used for Euclidean distance deformations
+	kdtree.setInputCloud(Qkeypoints);
+	cout << "2";
+	float max = 0;
+	//copyPointCloud(*Qkeypoints, *similarityCloud);
+	extract= pcl::ExtractIndices<pcl::PointXYZ>::Ptr(new ExtractIndices<pcl::PointXYZ>());
+	cout << "3";
+	extract->setNegative(false);
+	extract->setInputCloud(Qkeypoints);//used for the euclidean case
+	//vector<uint32_t> M(similarityCloud->size());//moved to inside the function. Legacy motivation was normalization 
+	cout << "4";
+	for (int i = 0; i < model_vertices; i++) {//calculating similarity for each search window
+		pointSimilarity(i, TDistances, F_R);//sim holds the index of the point in Q and it's score
+		//for (int j = 0; j < num_samples; j++) {//updating scores of top results
+			//Feature_Scores_Q.at(F_R.at(j).first).push(sim.at(j));
+			//if (Feature_Scores_Q.at(F_R.at(j).first).size() > candidates) Feature_Scores_Q.at(F_R.at(j).first).pop();//we keep only top scores
+		//}
+	}
+	cout << "5";
+	for (int i = 0; i < num_samples; i++) {//writing top results
+		Result.at(feature_point_inds.at(i)).resize(candidates);
+
+
+		//for (int j = candidates - 1; j >= 0; j--) {//writing top results j replaced with 0
+			Result.at(feature_point_inds.at(i)).at(0).first = distance(Fsimilarity.at(i).begin(), max_element(Fsimilarity.at(i).begin(), Fsimilarity.at(i).end()));
+			Gmax.at(feature_point_inds.at(i)) = Fsimilarity.at(i).at(Result.at(feature_point_inds.at(i)).at(0).first);
+
+			//Result.at(feature_point_inds.at(i)).at(0) = Feature_Scores_Q.at(i).top(); Feature_Scores_Q.at(i).pop();
+			//cout << "7";
+			//if (j == 0) 
+			switch (P.similarity){
+				case TRIDIS: {
+					Result.at(feature_point_inds.at(i)).at(0) = lower_scale_sim_max(feature_point_inds.at(i), Result.at(feature_point_inds.at(i)).at(0).first, i, MSWDIS);//finding lower scale similarity
+				    //if (j == 0) 
+						Mmax.at(feature_point_inds.at(i)) = Result.at(feature_point_inds.at(i)).at(0).second;
+					Result.at(feature_point_inds.at(i)).at(0) = lower_scale_sim_max(feature_point_inds.at(i), Result.at(feature_point_inds.at(i)).at(0).first, i, TRIDIS);//finding lower scale similarity
+					//if (j == 0) 
+						Lmax.at(feature_point_inds.at(i)) = Result.at(feature_point_inds.at(i)).at(0).second; break;
+				}
+				case MSWDIS: {
+				Result.at(feature_point_inds.at(i)).at(0) = lower_scale_sim_max(feature_point_inds.at(i), Result.at(feature_point_inds.at(i)).at(0).first,i, MSWDIS);//finding lower scale similarity
+				//if (j == 0) 
+					Mmax.at(feature_point_inds.at(i)) = Result.at(feature_point_inds.at(i)).at(0).second; break;
+				}
+			}
+		//}
+		feature_point_map.at(i) = Result.at(feature_point_inds.at(i)).at(0).first;
+	}
+	cout << "6";
+
+	return Result;
+}
+
+template<class CloudT, class D> void Feature1<CloudT, D>::pointSimilarity(uint32_t i, vector<vector<float>>& TDistances, vector<ind_r_s>& F_R) {
+	scene_P_D.assign(model_vertices, ind_r_s(MAXUINT32, INFINITY));
+	float R = F_R.at(0).second;//setting the current point maximal radius
+	uint32_t M;// vector<uint32_t> M(similarityCloud->size()); legacy - used for normalization
+
+	extractTemplateCandidate(i, scene_P_D, extract,R,M);//to be done for 1st feature point and trimmed down with each smaller radius point
+
+	for (std::vector<ind_dis_s> ::const_iterator f_r = F_R.begin(); f_r < F_R.end(); ++f_r) {//j iterates over feature points
+		float R = f_r->second;//setting the current point maximal radius
+		int ind = f_r->first;
+		//Kappacum->assign(part_vertices,0);
+		closest_temp.assign(part_vertices, MAXUINT32);//holds the correspondences with minimal distance difference
+		//SQuasiGeoDistances.clear();
+		//vector<float> sceneDistances;//to be done for 1st feature point and trimmed down with each
+		/*else if (P.r_thresh == 100){ //distances and indices for smaller radius points extracted from surviving pool
+			scene_P_D.clear();
+			//cout << "template extractionin\n";
+			for (int k = 0; k < last_scene_P_D.size(); k++) {
+				if (last_scene_P_D.at(k).second < R) scene_P_D.push_back(last_scene_P_D.at(k));
+			}
+		}*/
+		//last_scene_P_D = scene_P_D;//updating for the next iteration
+		//M = scene_P_D.size();
+		r_j.assign(model_vertices, INFINITY);
+		Kappa.assign(part_vertices,0);
+		Kappa_j.assign(model_vertices, 0);
+		Patch_Buddies.assign(model_vertices, MAXUINT32);
+		mindistances.assign(part_vertices, INFINITY);//distance difference of the minimal corresponding point
+		//cout << "candidate stats\n";
+
+		extractCandidatestats(scene_P_D, M, TDistances.at(ind), mindistances, Kappa,Kappa_j, Patch_Buddies, r_j, closest_temp, DIS_cummulative->at(i), ind);
+		tris_dis_s sim = Similarity(M, scene_P_D, Kappa, Kappa_j, mindistances, Patch_Buddies, r_j, DIS_cummulative->at(i).counter[0], TDistances.at(ind));
+		//sim_result.push_back(ind_dis_s(i,get<0>(sim)));
+
+		switch (P.similarity) {
+		case (TRIDIS): {
+			MSFsimilarity.at(ind).at(i) = get<1>(sim);
+			LSFsimilarity.at(ind).at(i) = get<2>(sim);//getting 3rd scale similarity score
+			break;
+		}
+
+		case (MSWDIS): {
+			MSFsimilarity.at(ind).at(i) = get<1>(sim);//getting 2nd scale similarity score
+		}			   
+		}
+		Fsimilarity.at(ind).at(i) = get<0>(sim);
+	};
+	//return sim_result;
+}
+
+template<class CloudT, class D> tris_dis_s Feature1<CloudT,D>::Similarity(int M, vector<ind_r_s>& scene_P_D, vector<uint32_t>& Kappa, std::vector<uint32_t>& Kappa_j, vector<float>& mindistances,
+	std::vector<uint32_t>& Patch_Buddies, std::vector<float>& r_j, int& DISs, std::vector<float>& Distances) {
+	switch (P.similarity) {
+	case WDIS: return tris_dis_s(WDISfunc(M,Kappa,mindistances),0,0);
+	case WDISP: return tris_dis_s(WDISPfunc(M, Kappa, mindistances, Distances), 0, 0);
+	case DIS: return tris_dis_s(DISs, 0, 0);;
+	case DDIS: return tris_dis_s(DDISfunc(M, Kappa_j, r_j), 0, 0);
+	case BBS: return tris_dis_s(BBSfunc(M, scene_P_D,Kappa, Patch_Buddies), 0, 0);
+	case WBBS: return tris_dis_s(WBBSfunc(M, scene_P_D, Kappa, Patch_Buddies, mindistances), 0, 0);
+	case HDIS: return tris_dis_s(HDISfunc(M, Kappa, mindistances), 0, 0);
+	case HDISP: return tris_dis_s(HDISPfunc(M, Kappa, mindistances), 0, 0);
+	case MSWDIS: return MSWDISfunc(M, Kappa, mindistances, Distances);
+	case TRIDISP: return TRIDISPfunc(M, Kappa, mindistances, Distances);
+	case TRIDIS: return TRISDISfunc(M, Kappa, mindistances, Distances);
+
+	default: return tris_dis_s(0,0,0);
+	}
+}
+
+template<class CloudT, class D> ms_dis_s Feature1<CloudT, D>::MSSimilarity(int M, vector<ind_r_s>& scene_P_D, vector<uint32_t>& Kappa, std::vector<uint32_t>& Kappa_j, vector<float>& mindistances,
+	std::vector<uint32_t>& Patch_Buddies, std::vector<float>& r_j, int& DISs, std::vector<float>& Distances) {
+	switch (P.similarity) {
+
+	default: return ms_dis_s(0,0);
+	}
+}
+
+template<class CloudT, class D> void Feature1<CloudT, D>::loadF(nnfDest d, string path) {
+	cout << "loading " << path << endl;
+	switch (d){
+	case Q: pcl::io::loadPCDFile<CloudT>(path, QF); cout << "descriptors:" << QF.size() <<endl; break;
+	case T: pcl::io::loadPCDFile<CloudT>(path, TF); cout << "descriptors:" << TF.size() << endl; break;
+	}
+}
+
+template<class CloudT, class D> float Feature1<CloudT,D>::BBSfunc(int M, vector<ind_r_s>& scene_P_D, vector<uint32_t>& Kappa,std::vector<uint32_t>& Patch_Buddies) {
+	float result = 0; std::vector<int> neigh_indices; std::vector<float> neigh_sqr_dists;
+	PointCloud<CloudT>::Ptr patchCloud(new PointCloud<CloudT>);
+	cout << "1";
+	for (size_t j = 0; j < M; ++j) {
+		patchCloud->push_back(QF.at(scene_P_D.at(j).first));
+	}
+	pcl::KdTreeFLANN<CloudT, D> patchKDTree;
+	patchKDTree.setInputCloud(patchCloud);
+	for (size_t j = 0; j < TF.size(); ++j) {
+		if (Kappa.at(j) != 0) {
+			int found_neighs = patchKDTree.nearestKSearch(TF.at(j), 1, neigh_indices, neigh_sqr_dists);
+			if (Patch_Buddies[neigh_indices[0]] == j) { result++; }
+		}
+	}
+	return result;
+}
+
+template<class CloudT, class D> float Feature1<CloudT, D>::WBBSfunc(int M, vector<ind_r_s>& scene_P_D, vector<uint32_t>& Kappa, std::vector<uint32_t>& Patch_Buddies, vector<float>& mindistances) {
+	float result = 0; std::vector<int> neigh_indices; std::vector<float> neigh_sqr_dists;
+	PointCloud<CloudT>::Ptr patchCloud(new PointCloud<CloudT>);
+	for (size_t j = 0; j < M; ++j) {
+		patchCloud->push_back(QF.at(scene_P_D.at(j).first));
+	}
+	pcl::KdTreeFLANN<CloudT, D> patchKDTree;
+	patchKDTree.setInputCloud(patchCloud);
+	for (size_t j = 0; j < TF.size(); ++j) {
+		if (Kappa.at(j) != 0) {
+			int found_neighs = patchKDTree.nearestKSearch(TF.at(j), 1, neigh_indices, neigh_sqr_dists);
+			if (Patch_Buddies[neigh_indices[0]] == j) { result+=1/(1+mindistances.at(j)); }
+		}
+	}
+	return result;
+};
+
+template<class CloudT> void CHI2Feature<CloudT>::demean_features(nnfDest d) {
+    pcl:PointCloud<CloudT>* F;
+	switch (d) {
+	case Q:   F = &QF; break;
+	case T:   F = &TF; break;
+	}
+	
+	for (int i = 0; i < F->size(); i++) {
+		CloudT * Feat = &F->at(i);
+		for (int j = 0; j < MeanF.descriptorSize(); j++) {
+			Feat->histogram[j] -= MeanF.histogram[j];
+		}
+	}
+}
+
+template<class CloudT> void CHI2Feature<CloudT>::feature_moments() {
+	for (int i = 0; i < TF.size(); i++) {
+		CloudT feature = TF.at(i);
+		for (int j = 0; j < MeanF.descriptorSize(); j++) {
+			MeanF.histogram[j] += feature.histogram[j]/TF.size();
+		}
+	}
+
+	for (int i = 0; i < TF.size(); i++) {
+		CloudT feature = TF.at(i);
+		for (int j = 0; j < MeanF.descriptorSize(); j++) {
+			VarF.histogram[j] += pow((feature.histogram[j] - MeanF.histogram[j]), 2) / TF.size();
+		}
+	}
+};
+
+template<class CloudT> void L2Feature<CloudT>::demean_features(nnfDest d) {
+pcl:PointCloud<CloudT>* F;
+	switch (d) {
+	case Q:   F = &QF; break;
+	case T:   F = &TF; break;
+	}
+
+	for (int i = 0; i < F->size(); i++) {
+		CloudT * Feat = &F->at(i);
+		for (int j = 0; j < MeanF.descriptorSize(); j++) {
+			Feat->descriptor[j] -= MeanF.descriptor[j];
+		}
+	}
+}
+template<class CloudT> void L2Feature<CloudT>::feature_moments() {
+	for (int i = 0; i < TF.size(); i++) {
+		CloudT feature = TF.at(i);
+		for (int j = 0; j < MeanF.descriptorSize(); j++) {
+			MeanF.descriptor[j] += feature.descriptor[j] / TF.size();
+		}
+	}
+
+	for (int i = 0; i < TF.size(); i++) {
+		CloudT feature = TF.at(i);
+		for (int j = 0; j < MeanF.descriptorSize(); j++) {
+			VarF.descriptor[j] += pow((feature.descriptor[j]- MeanF.descriptor[j]),2)/ TF.size();
+		}
+	}
+};
+
+template<class CloudT> void CHI2Feature<CloudT>::computeNNF() {
+	if (P.normal_features) {
+		feature_moments();
+		demean_features(T);
+		demean_features(Q);
+	}
+	/*if (P.r_thresh < 100) {//leads to performance degredation!!
+		float R;
+		nnf_f.resize(feature_point_inds.size());
+		for (uint32_t i = 0; i < feature_point_inds.size(); i++) {//we treat each feature point as a template in this case
+			pcl:PointCloud<CloudT> F;
+			TDistances.at(i) = getTemplateDistances(P.pMode, feature_point_inds.at(i), R);
+			vector<int> map;
+			for (int j = 0; j < Tkeypoints->size(); j++) {
+				if (TDistances.at(i).at(j) < R_thresh) {//picking only points residing within the threshold radius
+					F.push_back(TF.at(j));
+					map.push_back(j);//saving mapping back to original cloud
+				}
+			}
+			nnf_f.at(i) = pcl::PointCloud<NNFX<1>>::Ptr(new pcl::PointCloud<NNFX<1>>());
+			nnf_f.at(i)->resize(Qkeypoints->size());
+			computeNNFChiSquare(F, QF, *nnf_f.at(i), P.nnf_reject_threshold);
+			for (int j = 0; j < Tkeypoints->size(); j++) {//mapping back to the original cloud
+				nnf_f.at(i)->at(j).labels[0] = map.at(nnf_f.at(i)->at(j).labels[0]);
+			}
+
+		}
+	}*/
+
+		if (P.nnfType == NNF) {
+			copyPointCloud(*Qkeypoints, *nnf);
+			computeNNFChiSquare(TF, QF, nnf, P.nnf_reject_threshold);
+		}
+		else if (P.nnfType == NNF1) {
+			nnf1->resize(Qkeypoints->size());
+			computeNNFChiSquare(TF, QF, *nnf1, P.nnf_reject_threshold);
+		}
+		else if (P.nnfType == NNF5) {
+			nnf5->resize(Qkeypoints->size());
+			computeNNFChiSquare(TF, QF, *nnf5, P.nnf_reject_threshold);
+		}
+	
+}
+
+template<class CloudT> void L2Feature<CloudT>::computeNNF() {
+	if (P.normal_features) {
+		feature_moments();
+		demean_features(T);
+		demean_features(Q);
+	}
+	copyPointCloud(*Qkeypoints,*nnf);
+	if (P.nnfType == NNF) {
+		copyPointCloud(*Qkeypoints, *nnf);
+		computeNNFL2(TF, QF, nnf, P.nnf_reject_threshold);
+	}
+	else if (P.nnfType == NNF1) {
+		nnf1->resize(Qkeypoints->size());
+		computeNNFL2(TF, QF, *nnf1, P.nnf_reject_threshold);
+	}
+	else if (P.nnfType == NNF5) {
+		nnf5->resize(Qkeypoints->size());
+		computeNNFL2(TF, QF, *nnf5, P.nnf_reject_threshold);
+	}
+}
+
+template<class CloudT, class D> void Feature1<CloudT, D>::saveCloud(string path, nnfDest d) {
+	FeatureCloud::saveCloud(path, d);
+	switch (d) {
+	case TFEATURE:pcl::io::savePCDFile(path, TF); break;
+	case QFEATURE:pcl::io::savePCDFile(path, QF); break;
+	}
+}
+
+
+template <class CloudT, class D> void Feature1<CloudT, D>::registration() {
+	CorrespondencesPtr rawCorrespondences = matchKeyPointsFeatures(); 
+	CorrespondencesPtr Corrs(new pcl::Correspondences());
+	//float thresholdPrecentage = 1;
+	//filterMatchesByFeaturesDist(QF, RF, rawCorrespondences, Correspondences, thresholdPrecentage);*/
+	Eigen::Matrix4f transform, inverseTransform, ransacTransform, ransacInverseTransform, icpInverseTransform;
+	if (P.do_ransac) {
+		ransac(rawCorrespondences,  resultkeypoints, Tkeypoints, *Corrs, rawCorrespondences->size() * 100, 15 * max(P.T.stat.MeanResolution, P.S.stat.MeanResolution));
+	}
+	else {
+		Corrs = rawCorrespondences;
+	}
+	calcTransform(resultkeypoints, Tkeypoints, Corrs, transform);
+	inverseTransform = transform.inverse();
+	transformPointCloud(*Tc, *Tc, inverseTransform);
+	transformPointCloud(*Tkeypoints, *Tkeypoints, inverseTransform);
+	transformPointCloud(*distc, *distc, inverseTransform);
+	transformPointCloud(*kappac, *kappac, inverseTransform);
+	transformPointCloud(*DDIS_refined_NNF, *DDIS_refined_NNF, inverseTransform);
+	pcl::PointXYZ center = Qc->at(resultinds.labels[0]);
+	pcl::PointXYZ Tcenter = Tc->at(T_f.ind);
+	Eigen::Matrix4f translate = Eigen::Matrix4f::Identity();
+	translate(0, 3) = center.x - Tcenter.x;
+	translate(1, 3) = center.y - Tcenter.y;
+	translate(2, 3) = center.z - Tcenter.z;
+	transformPointCloud(*Tc, *Tc, translate);
+	transformPointCloud(*Tkeypoints, *Tkeypoints, translate);
+	transformPointCloud(*distc, *distc, translate);
+	transformPointCloud(*kappac, *kappac, translate);
+	transformPointCloud(*DDIS_refined_NNF, *DDIS_refined_NNF, translate);
+
+}
+
+template <class CloudT, class D> void Feature1<CloudT, D>::registrationmds() {
+	CorrespondencesPtr rawCorrespondences = matchKeyPointsFeatures();
+	CorrespondencesPtr Corrs(new pcl::Correspondences());
+	//float thresholdPrecentage = 1;
+	//filterMatchesByFeaturesDist(QF, RF, rawCorrespondences, Correspondences, thresholdPrecentage);*/
+	Eigen::Matrix4f transform, inverseTransform, ransacTransform, ransacInverseTransform, icpInverseTransform;
+	if (P.do_ransac) {
+		ransac(rawCorrespondences, Qc, Tc, *Corrs, rawCorrespondences->size() * 100, 15 * max(P.T.stat.MeanResolution, P.S.stat.MeanResolution));
+	}
+	else {
+		Corrs = rawCorrespondences;
+	}
+	calcTransform(Qc, Tc, Corrs, transform);
+	inverseTransform = transform.inverse();
+	transformPointCloud(*Tc, *Tc, inverseTransform);
+}
+
+template<class CloudT, class D> pcl::CorrespondencesPtr Feature1<CloudT, D>::matchKeyPointsFeatures(float threshold) {
+	//pcl::CorrespondenceEstimation<CloudT, CloudT> estimator; 
+	pcl::CorrespondencesPtr correspondences(new Correspondences());
+	bool only_closest = true;
+	for (int i = 0; i < resultnnf5->size(); i++) {
+		pcl::Correspondence corr1;
+		corr1.index_query = i;
+		corr1.index_match = resultnnf5->at(i).labels[0];
+		corr1.distance = distcfull->at(i).intensity;
+		//if (!(only_closest && (closest_matches.at(corr1.index_match) == MAXUINT32) && (corr1.distance<threshold))&& (resultnnf5->at(i).labels[0] != MAXUINT32)){
+		if (!(only_closest && (corr1.distance>threshold)) && (resultnnf5->at(i).labels[0] != MAXUINT32)) {
+			correspondences->push_back(corr1);
+		}
+	}
+
+	return correspondences;
+};
+
+template<class CloudT, class D> pcl::CorrespondencesPtr Feature1<CloudT, D>::matchKeyPointsFeaturesmds(float threshold) {
+	//pcl::CorrespondenceEstimation<CloudT, CloudT> estimator; 
+	pcl::CorrespondencesPtr correspondences(new Correspondences());
+	bool only_closest = false;
+	for (int i = 0; i < resultnnf5->size(); i++) {
+		pcl::Correspondence corr1;
+		corr1.index_query = i;
+		corr1.index_match = resultnnf5->at(i).labels[0];
+		corr1.distance = distcfull->at(i).intensity;
+		if (!(only_closest && (closest_matches.at(corr1.index_match) == MAXUINT32) && (corr1.distance<threshold)) && (resultnnf5->at(i).labels[0] != MAXUINT32)) {
+			correspondences->push_back(corr1);
+		}
+	}
+	return correspondences;
+};
+
+template<class CloudT, class D> void Feature1<CloudT, D>::extractTemplate(int ind) {
+	/*pcl::ExtractIndices<pcl::PointXYZ>::Ptr extract(new ExtractIndices<pcl::PointXYZ>);
+	extract->setNegative(false);
+	extract->setInputCloud(Qkeypoints);
+	pcl::PointIndices::Ptr scene_indices(new pcl::PointIndices());
+	vector<float> sceneDistances;
+	extractTemplateCandidate(ind, scene_indices, sceneDistances, extract, T_f.RG);
+	copyPointCloud(*Qc, *resultlabel);
+	vector<float> Tdist = getTemplateDistances(P.pMode,T_f.ind);
+	resultnnf->clear(); resultnnf1->clear(); resultnnf5->clear(); resultkeypoints->clear(); result->clear(); 
+	for (int i = 0; i < scene_indices->indices.size(); i++) {
+		PointXYZI point;
+		point.x = Qkeypoints->at(scene_indices->indices.at(i)).x;
+		point.y = Qkeypoints->at(scene_indices->indices.at(i)).y;
+		point.z = Qkeypoints->at(scene_indices->indices.at(i)).z;
+		uint32_t label;
+		switch (P.nnfType) {
+		case NNF:resultnnf->push_back(nnf->at(scene_indices->indices.at(i))); label = nnf->at(scene_indices->indices.at(i)).label;  break;
+		case NNF1:resultnnf1->push_back(nnf1->at(scene_indices->indices.at(i))); label = nnf1->at(scene_indices->indices.at(i)).labels[0];  break;
+		case NNF5:resultnnf5->push_back(nnf5->at(scene_indices->indices.at(i))); label = nnf5->at(scene_indices->indices.at(i)).labels[0]; break;
+		}
+		point.intensity = MAXUINT32;
+		if (label < MAXUINT32) {
+			point.intensity = abs(sceneDistances.at(i) - Tdist.at(label)) / (P.T.stat.MeanResolution);
+		}
+		distcfull->push_back(point);
+		resultkeypoints->push_back(Qkeypoints->at(scene_indices->indices.at(i)));
+		RF.push_back(QF.at(scene_indices->indices.at(i)));
+	}
+	extractTemplateCandidate(ind, scene_indices, sceneDistances, extract, T_f.RG, true);
+	result_indices = scene_indices;
+	for (int i = 0; i < scene_indices->indices.size(); i++) {
+		result->push_back(Qc->at(scene_indices->indices.at(i)));
+		resultlabel->at(scene_indices->indices.at(i)).intensity = 160;
+	}
+	Rmesh = cut_mesh_from_points(Qmesh,scene_indices);
+*/
+}
+
+
+template<class CloudT, class D> void Feature1<CloudT, D>::extractResult(bool res) {
+	float & max = resultinds.distance[0];
+	max = 0;
+	for (int i = 0; i < similarityCloud->size(); i++) {
+		if (similarityCloud->at(i).intensity > max) {
+			max = similarityCloud->at(i).intensity; resultinds.labels[0] = i;
+		}
+	}
+	if (res) (saveres(P.result_dir+"\\ind.txt", resultinds.labels[0]));
+	extractTemplate(resultinds.labels[0]);
+};
+#endif
