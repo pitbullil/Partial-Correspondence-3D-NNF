@@ -1,10 +1,10 @@
 
-![Image](Figures\Overview.PNG)
-![Image](Figures\Results.PNG)
+![Overview](Figures\Overview.PNG)
+![Results](Figures\Results.PNG)
 
 # Partial-Correspondence-3D-NNF
 This repository contains the implementation of my M.Sc. work "Partial Correspondence of 3D Shapes using Properties of the Nearest-Neighbor Field"
-The movement from sparse to dense correspondence has been done by adjusting to code of [1](https://github.com/orlitany/FSPM) which [resides here](./FSPM/) to accept sparse correspondence
+The movement from sparse to dense correspondence has been done by adjusting to code of [[1]](https://github.com/orlitany/FSPM) which [resides here](./FSPM/) to accept sparse correspondence
 ---
 
 ## Installation Instructions
@@ -53,6 +53,11 @@ Download the dataset from [the site](http://faust.is.tue.mpg.de/).
 
 Since we require sampling to make the problem tractable, and the dense correspondence algorithm[1] requires 2-manifold meshes of a specific area, you should copy the code from [here](./Faust_Sampling) into the model directory and run "run.bat"
 We have only made a qualitative evaluation here, as it contains full to part problems
+
+---
+
+## Visualization
+to visualizing sparse correspondences we provide an example script for [SHREC'16:Partial](./visualize_matches_sparse.m)
 
 --- 
 ## References
