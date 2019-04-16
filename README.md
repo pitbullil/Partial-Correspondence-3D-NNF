@@ -39,12 +39,21 @@ Run [runSHREC16A](./runSHREC16A.m) - just set the correct paths to the dataset i
 
 For ground truth correspondences please contact the competition organizers, they had kindly provided me with the data, but had I have no permission to further divulge it myself.
 
+Alternatively our obtained correspondences can be downloaded below.
+
+Sparse: [Cuts](./Results/cuts_sparse.rar), [Holes](./Results/holes_sparse.rar)
+
+Dense: : [Cuts](./Results/cuts_dense.rar), [Holes](./Results/holes_dense.rar)
 
 ### SHREC'16:Matching of Deformable Shapes with Topological Noise[3]
 To run this experiment please download the  low resolution test set and evaluation code from
 [their site](https://vision.in.tum.de/~laehner/shrec2016/dataset.php)
 
 Run [runSHREC16B](./runSHREC16B.m) - just set the correct paths to the dataset inside the file.
+
+Alternatively our obtained correspondences can be downloaded below.
+
+[Sparse](./Results/topology_sparse.rar), [Dense](./Results/topology_dense.rar)
 
 Here you need to provide geoedesic distance matrices for each model. I provide a [matlab code](./create_geo_matrices.m) which achieves this.
 
