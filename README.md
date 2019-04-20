@@ -29,7 +29,7 @@ You now should be able to run everything in the root dir
 
 ---
 ## Evaluation
-We provide instructions to replicate our results. Sparse correspondences reside in "<match_dir>\greedy3", while dense correspondences reside in "<match_dir>\dense"
+We provide instructions to replicate our results. Sparse correspondences reside in "<match_dir>\refined_sparse\", while dense correspondences reside in "<match_dir>\dense\"
 
 ### SHREC'16:PARTIAL MATCHING OF DEFORMABLE SHAPES[2]
 To run this experiment please download the test set and evaluation code from
@@ -41,9 +41,7 @@ For ground truth correspondences please contact the competition organizers, they
 
 Alternatively our obtained correspondences can be downloaded below.
 
-Sparse: [Cuts](./Results/cuts_sparse.rar), [Holes](./Results/holes_sparse.rar)
-
-Dense: : [Cuts](./Results/cuts_dense.rar), [Holes](./Results/holes_dense.rar)
+[Sparse](./Results/SHREC16_partial_results_dense.rar), [Dense](./Results/SHREC16_partial_refined_sparse.rar)
 
 ### SHREC'16:Matching of Deformable Shapes with Topological Noise[3]
 To run this experiment please download the  low resolution test set and evaluation code from
