@@ -618,6 +618,96 @@ vector<vector<ind_dis_s>> FeatureCloud::outlier_refinement(float d_thresh, bool&
 	}
 
 	return Result;
+};
+
+void FeatureCloud::find_sample_points() {
+	vector<float> F = DistSumFunctional(DT);
+	vector<vector<uint32_t>> neighs = list_neighbors(Tmesh->polygons, Tc->size());
+	feature_point_inds = meshMaximas(F, neighs);
+	feature_point_inds = geodesicMaximasupression(F, feature_point_inds, DT, P.S.diam, 0.05);
+
+	boundary_label_s BoundIndices = MeshBoundary(Tmesh->polygons, Tc->size(), true);
+	sort(BoundIndices.ind.begin(), BoundIndices.ind.end());
+	vector<int>::iterator bound = BoundIndices.ind.begin();
+	vector<uint32_t> non_boundary_seeds;
+	for (int i = 0; i < feature_point_inds.size(); i++) {
+		uint32_t ind = feature_point_inds.at(i);
+		while (bound < BoundIndices.ind.end()) {
+			if (*bound == ind || *bound>ind) break;
+			bound++;
+		}
+		if ((bound == BoundIndices.ind.end()) || (*bound != ind)) non_boundary_seeds.push_back(ind);
+	}
+	if (!non_boundary_seeds.empty()) feature_point_inds = non_boundary_seeds;
+	surface_sampling(feature_point_inds, DT, P.S.diam, 0.05);
+	init_sim_structs();
+}
+
+void FeatureCloud::LoadFeatureInds(string path="") {
+	//if (path == "") path = P.T.path + "\\F_fast.csv";
+	if (path == "") path = P.T.path + "\\F_max_no_mds.csv";
+	feature_point_inds = load_csv_to_vector<uint32_t>(path);
+	num_samples = feature_point_inds.size();
+	FsimilarityCloud.resize(num_samples);
+	feature_point_map.resize(num_samples);
+	MSFsimilarityCloud.resize(num_samples);
+	LSFsimilarityCloud.resize(num_samples);
+	feature_point_map.resize(num_samples);
+	Fsimilarity.resize(num_samples);
+	MSFsimilarity.resize(num_samples);
+	LSFsimilarity.resize(num_samples);
+	model_vertices = Qc->size(); 
+	part_vertices = Tc->size(); 
+	uint32_t thread_load = model_vertices / P.threads;
+	for (int t = 0; t < P.threads; t++) {
+		thread_start.push_back(t*thread_load);
+		thread_end.push_back((t + 1)*thread_load);
+	}
+	thread_end.at(P.threads - 1) = model_vertices;
+	scene_P_D_t.assign(P.threads,vector<ind_r_s>(model_vertices, ind_r_s(MAXUINT32, INFINITY)));
+	closest_temp_t.assign(P.threads, vector<uint32_t>(part_vertices, MAXUINT32));
+	r_j_t.assign(P.threads, vector<float>(model_vertices, INFINITY));
+	Kappa_t.assign(P.threads, vector<uint32_t>(part_vertices, 0));
+	Kappa_j_t.assign(P.threads, vector<uint32_t>(model_vertices, 0));
+	Patch_Buddies_t.assign(P.threads, vector<uint32_t>(model_vertices, MAXUINT32));
+	mindistances_t.assign(P.threads, vector<float>(part_vertices, INFINITY));//distance difference of the minimal corresponding point
+
+	Gmax.resize(part_vertices);
+	Mmax.resize(part_vertices);
+	Lmax.resize(part_vertices);
+
+	FsimilarityCloudColor.resize(feature_point_inds.size());
+	Feature_Patches.resize(feature_point_inds.size());
+	TDistances.resize(feature_point_inds.size());
+	R_thresh = P.r_thresh * P.S.diam / 100;
+	if (P.save_similarity_clouds || P.similarity == MSWDIS || P.similarity == TRIDIS || P.similarity == TRIDISP) {
+		for (uint32_t i = 0; i < feature_point_inds.size(); i++) {
+				FsimilarityCloud.at(i) = XYZICloud::Ptr(new XYZICloud);
+				FsimilarityCloudColor.at(i) = XYZRGBCloud::Ptr(new XYZRGBCloud);
+				copyPointCloud(*Qc, *FsimilarityCloud.at(i));
+				Fsimilarity.at(i).resize(model_vertices);
+
+			if (P.similarity == MSWDIS|| P.similarity == TRIDIS|| P.similarity == TRIDISP) {
+				MSFsimilarityCloud.at(i) = XYZICloud::Ptr(new XYZICloud);
+				copyPointCloud(*Qc, *MSFsimilarityCloud.at(i));
+				MSFsimilarity.at(i).resize(model_vertices);
+			}
+
+			if (P.similarity == TRIDIS || P.similarity == TRIDISP) {
+				LSFsimilarityCloud.at(i) = XYZICloud::Ptr(new XYZICloud);
+				LSFsimilarity.at(i).resize(model_vertices);
+				copyPointCloud(*Qc, *LSFsimilarityCloud.at(i));
+			}
+
+
+		}
+	}
+	if (P.save_feature_patches) {
+		for (uint32_t i = 0; i < feature_point_inds.size(); i++) {
+			Feature_Patches.at(i) = PolygonMeshPtr(new PolygonMesh);
+		}
+	}
+
 }
 
 void FeatureCloud::saveTFocal(string path) {
