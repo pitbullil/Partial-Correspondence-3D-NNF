@@ -193,15 +193,14 @@ int main(int argc, char** argv)
 
 	//Refinement stage
 	greedy_opt_time.Reset();
-	c->gopt_use_m = true;
 	cout << "refinement\n"; bool change = false;
 	change = false;
 	c->distance_based_outlier_detector(1.15, 0.01);
 	results = c->outlier_refinement(0.01,change);
 	change = false;
+	c->gopt_use_m = true;
 	c->distance_based_outlier_detector(1.15, 0.01);
 	results=c->outlier_refinement(0.01, change);
-	c->gopt_use_m = true;
 	c->gopt_use_h = true;
 	c->distance_based_outlier_detector(1.15, 0.01);
 	results = c->outlier_refinement(0.01, change);

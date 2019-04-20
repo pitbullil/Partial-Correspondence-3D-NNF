@@ -520,10 +520,11 @@ void FeatureCloud::distance_based_outlier_detector(float mean_thresh, float d_th
 }
 
 vector<vector<ind_dis_s>> FeatureCloud::outlier_refinement(float d_thresh, bool& change) {
-	vector<vector<uint32_t>> llcandidates(num_samples, vector<uint32_t>(gopt_hl_cands*gopt_ml_cands*gopt_ll_cands, MAXUINT32));
-	vector<vector<uint32_t>> mlcandidates(num_samples, vector<uint32_t>(gopt_hl_cands*gopt_ml_cands, MAXUINT32));
+	vector<vector<uint32_t>> llcandidates(num_samples, vector<uint32_t>(gopt_ll_cands, MAXUINT32));
+	vector<vector<uint32_t>> mlcandidates(num_samples, vector<uint32_t>(gopt_ml_cands, MAXUINT32));
 	vector<vector<uint32_t>> hlcandidates(num_samples, vector<uint32_t>(gopt_hl_cands, MAXUINT32));
 	uint32_t num_bad = bad_inds.size(), ms_num, ls_num, ms_max_i, ls_max_i;
+	vector<vector<uint32_t>> neighs = list_neighbors(Qmesh->polygons, Qc->size());
 	vector<uint32_t> h_mark_inds(model_vertices, MAXUINT32);
 	vector<uint32_t> m_mark_inds(model_vertices, MAXUINT32);
 	vector<uint32_t> s_mark_inds(model_vertices, MAXUINT32);
@@ -545,64 +546,13 @@ vector<vector<ind_dis_s>> FeatureCloud::outlier_refinement(float d_thresh, bool&
 		hl_sim.assign(Fsimilarity.at(bad_inds.at(i)).begin(), Fsimilarity.at(bad_inds.at(i)).end());
 		ml_sim.assign(MSFsimilarity.at(bad_inds.at(i)).begin(), MSFsimilarity.at(bad_inds.at(i)).end());
 		ll_sim.assign(LSFsimilarity.at(bad_inds.at(i)).begin(), LSFsimilarity.at(bad_inds.at(i)).end());
-		for (int j = 0; j < gopt_hl_cands; j++) { //running on High level similarity	
-			uint32_t max_h = distance(hl_sim.begin(), max_element(hl_sim.begin(), hl_sim.end()));
-			hlcandidates.at(i).at(j) = max_h;
-			hl_distances.assign(DQ.at(max_h).begin(), DQ.at(max_h).end());//collecting a patch around the maxima
-			for (int l = 0; l < gopt_ml_cands; l++) {
-				ms_max = 0; ls_max = 0; ms_max_i = 0; ls_max_i = 0; ms_num = 0;
-				for (int d = 0; d < model_vertices; d++) {
-					if (hl_distances.at(d) < R_thresh_ms) {
-						m_mark_inds.at(ms_num++) = d;
-						if (ml_sim.at(d) > ms_max) {
-							ms_max = ml_sim.at(d); ms_max_i = d;
-						}
-						if (hl_distances.at(d) < 0.2*P.S.diam) {//blocking the same maxima from being chosen again
-							hl_sim.at(d) = 0;
-						}
-					}
-				}
-				mlcandidates.at(i).at(m_cand++) = ms_max_i;
-				ml_distances.assign(DQ.at(ms_max_i).begin(), DQ.at(ms_max_i).end());//collecting a patch around the maxima at medium scale
-				ls_num = 0;
-				for (int d = 0; d < ms_num; d++) {
-					if (ml_distances.at(m_mark_inds.at(d)) < R_thresh_ls) {
-						s_mark_inds.at(ls_num++) = d;
-						if (ll_sim.at(m_mark_inds.at(d)) > ls_max) {
-							ls_max = ll_sim.at(m_mark_inds.at(d)); ls_max_i = m_mark_inds.at(d);
-						}
-						if (ml_distances.at(m_mark_inds.at(d)) < 0.1*P.S.diam) {//blocking the same maxima from being chosen again
-							ml_sim.at(m_mark_inds.at(d)) = 0;
-						}
-					}
-				}
+		hlcandidates.at(i) = meshMaximas(hl_sim, neighs);
+		mlcandidates.at(i) = meshMaximas(ml_sim, neighs);
+		llcandidates.at(i) = meshMaximas(ll_sim, neighs);
+	}
 
-				llcandidates.at(i).at(l_cand++) = ls_max_i;
-				for (int k = 1; k < gopt_ll_cands; k++) {
-					ls_max = 0;
-					ll_distances.assign(DQ.at(ls_max_i).begin(), DQ.at(ls_max_i).end());//collecting a patch around the maxima
 
-					for (int d = 0; d < ls_num; d++) {
-						if (ll_distances.at(s_mark_inds.at(d)) < 0.03*P.S.diam) {
-							ll_sim.at(s_mark_inds.at(d)) = 0;
-						}
-						else if (ll_sim.at(s_mark_inds.at(d)) > ls_max) {
-							ls_max = ll_sim.at(s_mark_inds.at(d)); ls_max_i = s_mark_inds.at(d);
-						}
-					}
-					llcandidates.at(i).at(l_cand++) = ls_max_i;
-				}
-
-				ll_distances.assign(DQ.at(ls_max_i).begin(), DQ.at(ls_max_i).end());//blocking the same maxima from being chosen again
-
-				for (int d = 0; d < ls_num; d++) {
-					if (ll_distances.at(s_mark_inds.at(d)) < 0.03*P.S.diam) {
-						ll_sim.at(s_mark_inds.at(d)) = 0;
-					}
-				}
-			}
-		}
-	}//////////////////////////end collection of candidates//////////////////////////////
+	//////////////////////////end collection of candidates//////////////////////////////
 	vector<vector<uint32_t>> all_candidates;
 	all_candidates.resize(num_bad);
 	for (int i = 0; i < num_bad; i++) {
@@ -626,7 +576,7 @@ vector<vector<ind_dis_s>> FeatureCloud::outlier_refinement(float d_thresh, bool&
 	for (int i = 0; i < num_bad; i++) {
 		src = feature_point_inds.at(bad_inds.at(i));
 		best_score = INFINITY;
-		for (int c = 0; c < gopt_hl_cands*gopt_ll_cands*gopt_ml_cands; c++) {
+		for (int c = 0; c < all_candidates.at(i).size(); c++) {
 			cand = all_candidates.at(i).at(c);
 			dc = 0;
 			for (int j = 0; j < good_inds.size(); j++) {//creating distortion score
@@ -668,96 +618,6 @@ vector<vector<ind_dis_s>> FeatureCloud::outlier_refinement(float d_thresh, bool&
 	}
 
 	return Result;
-};
-
-void FeatureCloud::find_sample_points() {
-	vector<float> F = DistSumFunctional(DT);
-	vector<vector<uint32_t>> neighs = list_neighbors(Tmesh->polygons, Tc->size());
-	feature_point_inds = meshMaximas(F, neighs);
-	feature_point_inds = geodesicMaximasupression(F, feature_point_inds, DT, P.S.diam, 0.05);
-
-	boundary_label_s BoundIndices = MeshBoundary(Tmesh->polygons, Tc->size(), true);
-	sort(BoundIndices.ind.begin(), BoundIndices.ind.end());
-	vector<int>::iterator bound = BoundIndices.ind.begin();
-	vector<uint32_t> non_boundary_seeds;
-	for (int i = 0; i < feature_point_inds.size(); i++) {
-		uint32_t ind = feature_point_inds.at(i);
-		while (bound < BoundIndices.ind.end()) {
-			if (*bound == ind || *bound>ind) break;
-			bound++;
-		}
-		if ((bound == BoundIndices.ind.end()) || (*bound != ind)) non_boundary_seeds.push_back(ind);
-	}
-	if (!non_boundary_seeds.empty()) feature_point_inds = non_boundary_seeds;
-	surface_sampling(feature_point_inds, DT, P.S.diam, 0.05);
-	init_sim_structs();
-}
-
-void FeatureCloud::LoadFeatureInds(string path="") {
-	//if (path == "") path = P.T.path + "\\F_fast.csv";
-	if (path == "") path = P.T.path + "\\F_max_no_mds.csv";
-	feature_point_inds = load_csv_to_vector<uint32_t>(path);
-	num_samples = feature_point_inds.size();
-	FsimilarityCloud.resize(num_samples);
-	feature_point_map.resize(num_samples);
-	MSFsimilarityCloud.resize(num_samples);
-	LSFsimilarityCloud.resize(num_samples);
-	feature_point_map.resize(num_samples);
-	Fsimilarity.resize(num_samples);
-	MSFsimilarity.resize(num_samples);
-	LSFsimilarity.resize(num_samples);
-	model_vertices = Qc->size(); 
-	part_vertices = Tc->size(); 
-	uint32_t thread_load = model_vertices / P.threads;
-	for (int t = 0; t < P.threads; t++) {
-		thread_start.push_back(t*thread_load);
-		thread_end.push_back((t + 1)*thread_load);
-	}
-	thread_end.at(P.threads - 1) = model_vertices;
-	scene_P_D_t.assign(P.threads,vector<ind_r_s>(model_vertices, ind_r_s(MAXUINT32, INFINITY)));
-	closest_temp_t.assign(P.threads, vector<uint32_t>(part_vertices, MAXUINT32));
-	r_j_t.assign(P.threads, vector<float>(model_vertices, INFINITY));
-	Kappa_t.assign(P.threads, vector<uint32_t>(part_vertices, 0));
-	Kappa_j_t.assign(P.threads, vector<uint32_t>(model_vertices, 0));
-	Patch_Buddies_t.assign(P.threads, vector<uint32_t>(model_vertices, MAXUINT32));
-	mindistances_t.assign(P.threads, vector<float>(part_vertices, INFINITY));//distance difference of the minimal corresponding point
-
-	Gmax.resize(part_vertices);
-	Mmax.resize(part_vertices);
-	Lmax.resize(part_vertices);
-
-	FsimilarityCloudColor.resize(feature_point_inds.size());
-	Feature_Patches.resize(feature_point_inds.size());
-	TDistances.resize(feature_point_inds.size());
-	R_thresh = P.r_thresh * P.S.diam / 100;
-	if (P.save_similarity_clouds || P.similarity == MSWDIS || P.similarity == TRIDIS || P.similarity == TRIDISP) {
-		for (uint32_t i = 0; i < feature_point_inds.size(); i++) {
-				FsimilarityCloud.at(i) = XYZICloud::Ptr(new XYZICloud);
-				FsimilarityCloudColor.at(i) = XYZRGBCloud::Ptr(new XYZRGBCloud);
-				copyPointCloud(*Qc, *FsimilarityCloud.at(i));
-				Fsimilarity.at(i).resize(model_vertices);
-
-			if (P.similarity == MSWDIS|| P.similarity == TRIDIS|| P.similarity == TRIDISP) {
-				MSFsimilarityCloud.at(i) = XYZICloud::Ptr(new XYZICloud);
-				copyPointCloud(*Qc, *MSFsimilarityCloud.at(i));
-				MSFsimilarity.at(i).resize(model_vertices);
-			}
-
-			if (P.similarity == TRIDIS || P.similarity == TRIDISP) {
-				LSFsimilarityCloud.at(i) = XYZICloud::Ptr(new XYZICloud);
-				LSFsimilarity.at(i).resize(model_vertices);
-				copyPointCloud(*Qc, *LSFsimilarityCloud.at(i));
-			}
-
-
-		}
-	}
-	if (P.save_feature_patches) {
-		for (uint32_t i = 0; i < feature_point_inds.size(); i++) {
-			Feature_Patches.at(i) = PolygonMeshPtr(new PolygonMesh);
-		}
-	}
-
 }
 
 void FeatureCloud::saveTFocal(string path) {
