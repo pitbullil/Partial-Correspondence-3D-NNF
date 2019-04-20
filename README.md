@@ -41,7 +41,7 @@ For ground truth correspondences please contact the competition organizers, they
 
 Alternatively our obtained correspondences can be downloaded below.
 
-[Sparse](./Results/SHREC16_partial_results_dense.rar), [Dense](./Results/SHREC16_partial_refined_sparse.rar)
+[Sparse](./Results/SHREC16_partial_results_refined_sparse.rar), [Dense](./Results/SHREC16_partial_results_dense.rar)
 
 ### SHREC'16:Matching of Deformable Shapes with Topological Noise[3]
 To run this experiment please download the  low resolution test set and evaluation code from
