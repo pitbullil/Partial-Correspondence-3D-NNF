@@ -13,7 +13,7 @@ ddis_params.feature.rad = 3.00; %fraction prefcentage of sqrt(Area(M)) to use fo
 ddis_params.deformation_frac = 0.5; %distance penalty coefficient(epsilon). has negligent effect
 ddis_params.geodesic_disc_frac = 60.0; %Sparse algorithm beta. would input [beta,2*beta/3,beta/3]
 ddis_params.nnrej=1; % if lower than 1 results in rejecting very NN's which have a very similar 2nd best match
-ddis_params.threads = 6; %number of threads to run the sparse correpsondence algorithm on. should be less thna number of threads on pc
+ddis_params.threads = 4; %number of threads to run the sparse correpsondence algorithm on. should be less thna number of threads on pc
 ddis_params.use_greedy_opt = true; %if false no refinement is done
 ddis_params.set = 'cuts' %choose cuts or holes for the different sets
 
@@ -27,7 +27,7 @@ ddis_params.set = 'cuts' %choose cuts or holes for the different sets
     FSPM_params.verbose = true; %true for printing output and figures to screen
     FSPM_params.num_reiterate = 0; %number of refinement steps in Fully Spectral. Best result for Partial matching is obtained with 0
 
-models_dir = 'D:\OneDrive\SHREC16ATest\';%path to SHREC'16 Partial matching root dir (obtain from http://www.dais.unive.it/~shrec2016/dataset.php)
+models_dir = 'C:\Users\narbel\OneDrive\SHREC16ATest\';%path to SHREC'16 Partial matching root dir (obtain from http://www.dais.unive.it/~shrec2016/dataset.php)
 cd(models_dir)
 null_model_dir = fullfile(models_dir,'null');
 part_model_dir = fullfile(models_dir,ddis_params.set);

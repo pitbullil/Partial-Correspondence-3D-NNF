@@ -47,7 +47,10 @@ if strcmp(params.set,'cuts') | strcmp(params.set,'holes')
 end   
 match_file = fullfile(out_dir,match);
 
-if (params.use_greedy_opt) match_file = fullfile(out_dir,'greedy3',match); end;
+if (params.use_greedy_opt) match_file = fullfile(out_dir,'refined_sparse',match);
+else
+    match_file = fullfile(out_dir,'raw_sparse',match);
+end;
 
     tic;
     [stat,res]=system(strjoin({params.code_path,...

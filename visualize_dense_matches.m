@@ -3,8 +3,8 @@ ddis_params.code_path = fullfile(featurecodepath,'nnf_sparse_code','build','Rele
 addpath(genpath(featurecodepath))
 close all
 clear all
-models_dir = 'D:\OneDrive\SHREC16ATest\';%path to SHREC'16 Partial matching root dir (obtain from http://www.dais.unive.it/~shrec2016/dataset.php)
-set = 'cuts'; %replace to holes if necessary
+models_dir = 'C:\Users\narbel\OneDrive\SHREC16ATest\';%path to SHREC'16 Partial matching root dir (obtain from http://www.dais.unive.it/~shrec2016/dataset.php)
+set = 'holes'; %replace to holes if necessary
 null_model_dir = fullfile(models_dir,'null');
 part_model_dir = fullfile(models_dir,set);
 files = dir(fullfile(part_model_dir,'*.off'));

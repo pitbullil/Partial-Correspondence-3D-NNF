@@ -105,7 +105,7 @@ int main(int argc, char** argv)
 	surface_time.Reset();
 	string out_dir;
 	string test_string = c->P.T.path;
-	//c->LoadFeatureInds("");
+
 	if (c->P.T.path.compare(0, 4, "cuts") == 0 || c->P.T.path.compare(0, 5, "holes") == 0) {
 		out_dir = ".\\" + c->P.sim + "_" + ftos(c->P.r_thresh, 1) + "_DF_" + ftos(c->P.div_frac, 1) + "_NNR_" + ftos(c->P.nnf_reject_threshold, 2) + "_FR_" + ftos(c->P.frac, 2);
 	}
@@ -118,15 +118,12 @@ int main(int argc, char** argv)
 
 	
 	string out_dir_time = out_dir + "\\time\\";
-	string out_dir_filt = out_dir + "\\greedy1\\";
-	string out_dir_filt2 = out_dir + "\\greedy2\\";
-	string out_dir_filt3 = out_dir + "\\greedy3\\";
+	string raw_corrs = out_dir + "\\raw_sparse\\";
+	string refined_corrs = out_dir + "\\refined_sparse\\";
 
 	mkdir(out_dir.c_str());
-	mkdir(out_dir_filt.c_str());
-	mkdir(out_dir_filt2.c_str());
-	mkdir(out_dir_filt3.c_str());
-
+	mkdir(raw_corrs.c_str());
+	mkdir(refined_corrs.c_str());
 	mkdir(out_dir_time.c_str());
 
 	/***************************  Surface Reconstruction: ***********************************/
@@ -136,6 +133,7 @@ int main(int argc, char** argv)
 	printSection("grid calculation");
 	vector<barycentric_polygon_s> barmap = vertex_to_bar(c->Qmesh);
 	cout <<"init polygons: "<< c->Qmesh->polygons.size() << endl;
+
 	/***************************  Grid for Geodesics: ***********************************/
 	p.T.s.base = false; p.T.s.save = false; p.T.s.depth = 7; p.T.s.grid = true; p.T.s.cloudResolution = T_s.MaxResolution;
 	p.S.s = p.T.s;
@@ -147,7 +145,7 @@ int main(int argc, char** argv)
 	c->meshstats(Q); c->meshstats(T);
 	cout << "polygons: " << c->Qmesh->polygons.size() << endl;
 	c->find_sample_points();
-	//c->save_distance_matrix(p.T.path + "\\D.csv",T);
+
 	/*************************** Keypoint Calculations: ***********************************/
 	keypoints_time.Reset();
 	printSection("Keypoint Calculation");
@@ -155,7 +153,6 @@ int main(int argc, char** argv)
 	c->saveCloud(p.S.k.path, QKEY);
 	c->saveCloud(p.T.k.path, TKEY);
 	keypoints_time.SetTime(); logs.push_back(&keypoints_time);
-	//c->extractTemplateBoundaryInds();
 
 	/*************************** Feature Calculations: ***********************************/
 	printSection("Feature Calculation");
@@ -173,10 +170,7 @@ int main(int argc, char** argv)
 	printSection("NNF Calculation");
 	c->computeNNF();
 	c->saveCloud(p.nnf_dir + "nnf.pcd", NNF);
-	//c->saveCloud(p.nnf_dir + "nnf5color", NNFCOLOR);
 	nnf_time.SetTime(); logs.push_back(&nnf_time);
-	//cout << "polygons: " << c->Qmesh->polygons.size() << endl;
-
 
 	/*************************** Similarity Calculations: ***********************************/
 	similarity_time.Reset();
@@ -184,47 +178,37 @@ int main(int argc, char** argv)
 
 	printSection("Similarity Calculation");
 
+	//Raw similarity calculation
 	vector<vector<ind_dis_s>> results = c->calculateSimilarity();
-	//results = c->Densify_correspondences();
 	similarity_time.SetTime(); logs.push_back(&similarity_time);
 
 	vector<barycentric_polygon_s> corrs = corrs_to_bar_corrs(results, barmap);
 
-	save_bar_corrs(corrs, out_dir + "\\" + test_string +".corr");
-	save_feature_corrs_to_csv(results, out_dir + "\\"+ test_string +".csv",c->feature_point_inds);
+	save_bar_corrs(corrs, raw_corrs + "\\" + test_string +".corr");
+	save_feature_corrs_to_csv(results, raw_corrs + "\\"+ test_string +".csv",c->feature_point_inds);
 	if (c->P.save_similarity_clouds) c->saveCloud(p.result_dir, SIMILARITYCOLOR);
 
-	if (c->P.save_similarity_clouds) c->save_similarity(out_dir + "\\" + test_string);
-	if (c->P.save_feature_patches) c->extract_all_feature_patches(p.result_dir);
+	if (c->P.save_similarity_clouds) c->save_similarity(raw_corrs + "\\" + test_string);
+	if (c->P.save_feature_patches) c->extract_all_feature_patches(raw_corrs);
+
+	//Refinement stage
 	greedy_opt_time.Reset();
 	c->gopt_use_m = true;
-	cout << "filter1\n"; bool change = false;
-		change = false;
-		c->distance_based_filter(1.15, 0.01);
-		cout << "greedy\n";
-		results = c->greedy_opt(0.01,change);
-	corrs = corrs_to_bar_corrs(results, barmap);
-	save_bar_corrs(corrs, out_dir_filt + "\\" + test_string + ".corr");
-	save_feature_corrs_to_csv(results, out_dir_filt + "\\" + test_string + ".csv", c->feature_point_inds);
-	cout << "filter2\n";
-		change = false;
-	c->distance_based_filter(1.15, 0.01);
-	cout << "greedy2\n";
-	results=c->greedy_opt(0.01, change);
+	cout << "refinement\n"; bool change = false;
+	change = false;
+	c->distance_based_outlier_detector(1.15, 0.01);
+	results = c->outlier_refinement(0.01,change);
+	change = false;
+	c->distance_based_outlier_detector(1.15, 0.01);
+	results=c->outlier_refinement(0.01, change);
 	c->gopt_use_m = true;
-	corrs = corrs_to_bar_corrs(results, barmap);
-
-	save_bar_corrs(corrs, out_dir_filt2 + "\\" + test_string + ".corr");
-	save_feature_corrs_to_csv(results, out_dir_filt2 + "\\" + test_string + ".csv", c->feature_point_inds);
 	c->gopt_use_h = true;
-	c->distance_based_filter(1.15, 0.01);
-	cout << "greedy3\n";
-	results = c->greedy_opt(0.01, change);
-
+	c->distance_based_outlier_detector(1.15, 0.01);
+	results = c->outlier_refinement(0.01, change);
 	corrs = corrs_to_bar_corrs(results, barmap);
 
-	save_bar_corrs(corrs, out_dir_filt3 + "\\" + test_string + ".corr");
-	save_feature_corrs_to_csv(results, out_dir_filt3 + "\\" + test_string + ".csv", c->feature_point_inds);
+	save_bar_corrs(corrs, refined_corrs + "\\" + test_string + ".corr");
+	save_feature_corrs_to_csv(results, refined_corrs + "\\" + test_string + ".csv", c->feature_point_inds);
 
 	greedy_opt_time.SetTime();
 	logs.push_back(&greedy_opt_time);

@@ -329,8 +329,8 @@ public:
 	void init_sim_structs();
 
 	//////////////////////////////////postprocessing methods//////////////////////////////////////
-	void distance_based_filter(float mean_thresh,float d_thresh);
-	vector<vector<ind_dis_s>> greedy_opt(float d_thresh, bool& change);
+	void distance_based_outlier_detector(float mean_thresh,float d_thresh);
+	vector<vector<ind_dis_s>> outlier_refinement(float d_thresh, bool& change);
 
 	vector<int> extract_band_indices(float distance, float Ewidth);
 

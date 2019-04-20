@@ -456,7 +456,7 @@ void FeatureCloud::sim_to_nnf(vector<vector<ind_dis_s>> corrs, vector<uint32_t> 
 	}
 }
 
-void FeatureCloud::distance_based_filter(float mean_thresh, float d_thresh) {
+void FeatureCloud::distance_based_outlier_detector(float mean_thresh, float d_thresh) {
 	bad_inds.clear();
 	good_inds.clear();
 	vector<vector<float>> Rho(num_samples, vector<float>(num_samples, 0)), dD(num_samples, vector<float>(num_samples, 0));
@@ -519,7 +519,7 @@ void FeatureCloud::distance_based_filter(float mean_thresh, float d_thresh) {
 
 }
 
-vector<vector<ind_dis_s>> FeatureCloud::greedy_opt(float d_thresh, bool& change) {
+vector<vector<ind_dis_s>> FeatureCloud::outlier_refinement(float d_thresh, bool& change) {
 	vector<vector<uint32_t>> llcandidates(num_samples, vector<uint32_t>(gopt_hl_cands*gopt_ml_cands*gopt_ll_cands, MAXUINT32));
 	vector<vector<uint32_t>> mlcandidates(num_samples, vector<uint32_t>(gopt_hl_cands*gopt_ml_cands, MAXUINT32));
 	vector<vector<uint32_t>> hlcandidates(num_samples, vector<uint32_t>(gopt_hl_cands, MAXUINT32));
