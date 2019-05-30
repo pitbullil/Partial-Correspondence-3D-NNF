@@ -3,7 +3,7 @@
 ![Results](/Figures\/Results.PNG)
 
 # Partial-Correspondence-3D-NNF
-This repository contains the implementation of the work "Partial Correspondence of 3D Shapes using Properties of the Nearest-Neighbor Field" by Nadav Y. Arbel, Ayellet Tal and Lihi-Zelnik Manor.
+This repository contains the implementation of the work ["Partial Correspondence of 3D Shapes using Properties of the Nearest-Neighbor Field"](https://eur01.safelinks.protection.outlook.com/?url=https%3A%2F%2Fdoi.org%2F10.1016%2Fj.cag.2019.05.011&amp;data=02%7C01%7Cnyarbel%40campus.technion.ac.il%7Cb2aae53e68194f76676708d6e3aa10c8%7Cf1502c4cee2e411c9715c855f6753b84%7C1%7C0%7C636946716901390297&amp;sdata=1WKvXh7ObJbAioTzfDZmRZq7lD%2Fr144ammjI6I%2FYEnU%3D&amp;reserved=0) by Nadav Y. Arbel, Ayellet Tal and Lihi-Zelnik Manor. [Video](https://youtu.be/vxYan65O_WU)
 
 The movement from sparse to dense correspondence has been done by adjusting to code of [[1]](https://github.com/orlitany/FSPM) which [resides here](./FSPM/) to accept sparse correspondence
 ---
